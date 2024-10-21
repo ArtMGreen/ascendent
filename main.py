@@ -3,10 +3,11 @@ from astar import astar_dirs
 from client import SocketClient
 from config import team, dir_init
 from image_transforms import make_grid, match_template
-from models import image_to_objects
+from models import find, image_to_objects
 import navigation
 from queue import Queue
 
+team = None
 goals = {}
 socket = SocketClient('192.168.2.32', 9998)
 instructions_queue = Queue()
@@ -42,7 +43,7 @@ def send_from_queue() -> bool:
     if not instructions_queue.empty():
         instruction = instructions_queue.get(False)
         update_dir(instruction)
-        socket.send(f'{instruction[0]};{instruction[1]}')
+        socket.send(f'move {instruction[0]} {instruction[1]}')
         return True
     return False
 
@@ -55,26 +56,21 @@ def choose_preference() -> str:
         return 'ball'
     return 'base_r' if team == 'red' else 'base_g'
 
-def init_goals() -> None:
-    while (
-        (team == 'red' and 'robot_r' not in goals or 'base_r' not in goals) or 
-        (team == 'green' and 'robot_g' not in goals or 'base_g' not in goals)
-    ):
-        image_robot, image_field, cmd = socket.receive().split('!')
-        image_field = bytes_to_numpy(image_field)
-        goals = navigation.extract_goals(image_field)
-        grid = match_template(make_grid(image_field))
-    robot = navigation.find_robot(team, goals)
-    base = navigation.find_base(team, goals)
-    if robot is not None and base is not None:
-        print('init success!')
 
-init_goals()    
-input('press enter to start...')
 while True:
     image_robot, image_field, cmd = socket.receive().split('!')
     match cmd:
         case '': continue
+        case 'start | green', 'start | red':
+            team = cmd.split(' | ')[1]
+            image_field = bytes_to_numpy(image_field)
+            goals = navigation.extract_goals(image_field)
+            grid = match_template(make_grid(image_field))
+            robot = navigation.find_robot(team, goals)
+            base = navigation.find_base(team, goals)
+            if robot is not None and base is not None:
+                print('init success!')
+            socket.send('ok')
         case 'what':
             if send_from_queue(): continue
             match current_goal:
@@ -93,6 +89,7 @@ while True:
                         send_from_queue()
                 case 'buttons':
                     socket.send('press')
+                    buttons += 1
                 case 'cube':
                     socket.send('take')
                     cubes += 1
@@ -115,9 +112,15 @@ while True:
                     instructions_queue.put(command)
                 send_from_queue()
         case 'find':
-            ... # ToDo x y z
+            x, y, z = find(current_goal, bytes_to_numpy(image_robot))
             match current_goal:
-                case 'base_r', 'base_g', 'buttons':
+                case 'base_r', 'base_g':
                     current_goal = None
+                    socket.send(f'throw {x} {y} {z}')
+                case 'buttons':
+                    current_goal = None
+                    socket.send(f'press {x} {y} {z}')
                 case 'cube', 'ball':
                     current_goal = 'base_r' if team == 'red' else 'base_g'
+                    socket.send(f'take {x} {y} {z}')
+                    

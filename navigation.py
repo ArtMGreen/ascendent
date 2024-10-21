@@ -1,10 +1,7 @@
 import math
 from typing import Dict, List, Optional, Tuple
 import cv2
-from ultralytics import YOLO
-from astar import astar_dirs
-from config import dir_init, team
-from image_transforms import make_grid, match_template, transform_coordinates, unfish
+from image_transforms import transform_coordinates
 import models
 
 
@@ -126,6 +123,7 @@ def find_base(team: str, goals: dict[str, list[tuple[int, int]]]) -> tuple[int, 
     else: return None
     return robot
 
+
 def extract_goals(image: cv2.typing.MatLike) -> dict[str, list[tuple[int, int]]]:
     pred = models.model_field.predict(source=image, conf=0.15)[0]
     goals = {}
@@ -140,22 +138,3 @@ def extract_goals(image: cv2.typing.MatLike) -> dict[str, list[tuple[int, int]]]
         goals[models.labels_field[int(box.cls.item())]].append(point)
     return goals
 
-# def get_instructions(image: cv2.typing.MatLike, robot):
-    # for _ in range(10):
-    #     goals = extract_goals(image)
-    #     goal = choose_goal(goals, robot, 'green' if team == 'red' else 'red', 'buttons')
-    #     if robot is not None and goal is not None:
-    #         robot = (robot[1], robot[0])
-    #         goal = (goal[1], goal[0])
-    #         route = astar_dirs(grid, robot, goal, dir_init)
-    #         commands = get_commands(route, dir_init)
-    #         if not commands:
-    #             commands = []
-    #         return commands
-
-
-if __name__ == "__main__":
-    image = cv2.imread('res/images/field/left0.png')
-
-    grid = match_template(make_grid(image))
-    print(get_instructions(image))

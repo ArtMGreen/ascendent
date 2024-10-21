@@ -1,18 +1,18 @@
 import numpy as np
 from astar import astar_dirs
 from client import SocketClient
-from config import team, dir_init
-from image_transforms import make_grid, match_template
-from models import find, image_to_objects
+from config import dir_init
+from models import find
 import navigation
 from queue import Queue
 
 team = None
 goals = {}
-socket = SocketClient('192.168.2.32', 9998)
+socket = SocketClient('192.168.212.111', 9998)
 instructions_queue = Queue()
 grid = None
-current_goal = None
+# current_goal = None
+current_goal = 'cube'
 cubes = 0
 buttons = 0
 balls = 0
@@ -56,49 +56,58 @@ def choose_preference() -> str:
         return 'ball'
     return 'base_r' if team == 'red' else 'base_g'
 
-
+print('started main.py')
 while True:
     image_robot, image_field, cmd = socket.receive().split('!')
     match cmd:
         case '': continue
         case 'start | green', 'start | red':
             team = cmd.split(' | ')[1]
-            image_field = bytes_to_numpy(image_field)
-            goals = navigation.extract_goals(image_field)
-            grid = match_template(make_grid(image_field))
-            robot = navigation.find_robot(team, goals)
-            base = navigation.find_base(team, goals)
-            if robot is not None and base is not None:
-                print('init success!')
+            # image_field = bytes_to_numpy(image_field)
+            # goals = navigation.extract_goals(image_field)
+            # grid = match_template(make_grid(image_field))
+            # robot = navigation.find_robot(team, goals)
+            # base = navigation.find_base(team, goals)
+            # if robot is not None and base is not None:
+            #     print('init success!')
             socket.send('ok')
+            print('socket get: start')
+            print('socket send: ok')
         case 'what':
+            print('socket get: what')
             if send_from_queue(): continue
             match current_goal:
                 case None:
-                    goals = navigation.extract_goals(bytes_to_numpy(image_field))
-                    robot = navigation.find_robot(team, goals)
-                    current_goal = choose_preference()
-                    goal = navigation.choose_goal(goals, robot, 'green' if team == 'red' else 'red', current_goal)
-                    if robot is not None and goal is not None:
-                        robot = (robot[1], robot[0])
-                        goal = (goal[1], goal[0])
-                        route = astar_dirs(grid, robot, goal, dir_init)
-                        commands = navigation.get_commands(route, dir_init)
-                        for command in commands:
-                            instructions_queue.put(command)
-                        send_from_queue()
+                    # goals = navigation.extract_goals(bytes_to_numpy(image_field))
+                    # robot = navigation.find_robot(team, goals)
+                    # current_goal = choose_preference()
+                    # goal = navigation.choose_goal(goals, robot, 'green' if team == 'red' else 'red', current_goal)
+                    # if robot is not None and goal is not None:
+                    #     robot = (robot[1], robot[0])
+                    #     goal = (goal[1], goal[0])
+                    #     route = astar_dirs(grid, robot, goal, dir_init)
+                    #     commands = navigation.get_commands(route, dir_init)
+                    #     for command in commands:
+                    #         instructions_queue.put(command)
+                    #     send_from_queue()
+                    pass
                 case 'buttons':
                     socket.send('press')
                     buttons += 1
+                    print('socket send: press')
                 case 'cube':
                     socket.send('take')
                     cubes += 1
+                    print('socket send: take')
                 case 'ball':
                     socket.send('take')
                     balls += 1
+                    print('socket send: take')
                 case 'base_r', 'base_g':
                     socket.send('drop')
+                    print('socket send: drop')
         case 'fail':
+            print('socket get: fail')
             goals = navigation.extract_goals(bytes_to_numpy(image_field))
             robot = navigation.find_robot(team, goals)
             preference = choose_preference()
@@ -112,15 +121,15 @@ while True:
                     instructions_queue.put(command)
                 send_from_queue()
         case 'find':
+            print('socket get: find')
             x, y, z = find(current_goal, bytes_to_numpy(image_robot))
             match current_goal:
-                case 'base_r', 'base_g':
+                case 'base_r', 'base_g', 'buttons':
                     current_goal = None
-                    socket.send(f'throw {x} {y} {z}')
-                case 'buttons':
-                    current_goal = None
-                    socket.send(f'press {x} {y} {z}')
+                    socket.send(f'{x} {y} {z}')
+                    print(f'socket send: {x} {y} {z}')
                 case 'cube', 'ball':
                     current_goal = 'base_r' if team == 'red' else 'base_g'
-                    socket.send(f'take {x} {y} {z}')
+                    socket.send(f'{x} {y} {z}')
+                    print(f'socket send: {x} {y} {z}')
                     
